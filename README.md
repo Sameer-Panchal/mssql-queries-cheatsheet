@@ -1,8 +1,3 @@
-# MS SQL (T‑SQL) Query Cheatsheet
-
-> A minimal README containing only T‑SQL code snippets.
-
-```sql
 -- 1) Delete duplicate record from table (keep one per Col_Name)
 WITH CTE AS (
   SELECT *,
@@ -230,4 +225,60 @@ SELECT CONCAT(First_Name, ' ', Last_Name, ' - ', FORMAT(HireDate, 'MM/dd/yyyy'))
 FROM dbo.Employees
 WHERE HireDate IS NOT NULL
 ORDER BY HireDate;
-```
+
+
+-- 28) Display employees grouped by age brackets (20–30, 31–40, 41–50, 51–60, 61+)
+WITH AgeCTE AS (
+  SELECT e.Employee_ID,
+         e.Employee_Name,
+         DATEDIFF(year, e.Date_Of_Birth, GETDATE())
+           - CASE WHEN DATEADD(year, DATEDIFF(year, e.Date_Of_Birth, GETDATE()), e.Date_Of_Birth) > GETDATE()
+                  THEN 1 ELSE 0 END AS AgeYears
+  FROM dbo.Employees e
+)
+SELECT CASE
+         WHEN AgeYears BETWEEN 20 AND 30 THEN '20-30'
+         WHEN AgeYears BETWEEN 31 AND 40 THEN '31-40'
+         WHEN AgeYears BETWEEN 41 AND 50 THEN '41-50'
+         WHEN AgeYears BETWEEN 51 AND 60 THEN '51-60'
+         WHEN AgeYears >= 61 THEN '61+'
+         ELSE 'Under 20'
+       END AS AgeBracket,
+       COUNT(*) AS EmployeeCount
+FROM AgeCTE
+WHERE AgeYears IS NOT NULL
+GROUP BY CASE
+           WHEN AgeYears BETWEEN 20 AND 30 THEN '20-30'
+           WHEN AgeYears BETWEEN 31 AND 40 THEN '31-40'
+           WHEN AgeYears BETWEEN 41 AND 50 THEN '41-50'
+           WHEN AgeYears BETWEEN 51 AND 60 THEN '51-60'
+           WHEN AgeYears >= 61 THEN '61+'
+           ELSE 'Under 20'
+         END
+ORDER BY CASE
+           WHEN EXISTS (SELECT 1 WHERE 1=0) THEN 0 -- placeholder, keeps ORDER BY at end
+           WHEN 'Under 20' = 'Under 20' THEN 1
+         END,
+         CASE
+           WHEN AgeBracket = '20-30' THEN 2
+           WHEN AgeBracket = '31-40' THEN 3
+           WHEN AgeBracket = '41-50' THEN 4
+           WHEN AgeBracket = '51-60' THEN 5
+           WHEN AgeBracket = '61+'   THEN 6
+           ELSE 7
+         END;
+
+
+-- 29) Products with strictly increasing prices (never reduced, never equal consecutively)
+WITH ordered AS (
+  SELECT
+      Product_ID,
+      Price,
+      Price_Date,
+      LAG(Price) OVER (PARTITION BY Product_ID ORDER BY Price_Date) AS Prev_Price
+  FROM dbo.Product_Prices
+)
+SELECT Product_ID
+FROM ordered
+GROUP BY Product_ID
+HAVING SUM(CASE WHEN Prev_Price IS NOT NULL AND Price <= Prev_Price THEN 1 ELSE 0 END) = 0;
